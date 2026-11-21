@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -47,6 +48,8 @@ button:disabled{opacity:.4;cursor:default}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
 .tabs button,.small{font-size:13px;padding:6px 12px;border-radius:99px;min-width:36px}
 .tabs button.on,.small.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.tabs button.bad{border-color:var(--coral);color:var(--coral2)}
+.tabs button.bad.on{background:var(--coral);border-color:var(--coral);color:#fff}
 canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(--line);border-radius:22px;touch-action:none;user-select:none;-webkit-user-select:none}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
 .sw{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
@@ -109,8 +112,9 @@ canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(-
   <canvas id="edCanvas" class="cv" width="512" height="384"></canvas>
   <div class="row"><span class="lbl">Suelo</span><span id="floorSw" class="row" style="margin:0"></span><button id="edView" class="small" style="margin-left:auto"></button></div>
   <div id="selName"></div>
+  <div class="msg" id="edMsg" style="text-align:left;min-height:22px;margin:2px 0 8px"></div>
   <div class="pal" id="palette"></div>
-  <p class="help">Toca o arrastra para colocar. Recoge todas las gemas y llega a la salida para pasar de sala. Sin salida, la sala se supera al recoger todas las gemas. Un juego puede tener hasta 30 salas (botón +).</p>
+  <p class="help">Toca o arrastra para colocar. Recoge todas las gemas y llega a la salida para pasar de sala. Sin salida, la sala se supera al recoger todas las gemas. Un juego puede tener hasta 30 salas (botón +). Cada sala necesita exactamente 2 agujeros de teletransporte, ni uno más ni uno menos: al pisar uno apareces en el otro.</p>
   <div class="btnrow">
     <button id="edTest">Probar</button>
     <button id="edClear">Limpiar sala</button>
@@ -131,7 +135,7 @@ canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(-
       <button id="ovExit">Salir</button>
     </div>
   </div>
-  <div class="dragzone"><p class="help">Arrastra el dedo o el ratón por toda la pantalla, también por esta zona, en la dirección que quieras ir (4 direcciones, paralelas a los bordes). También funcionan las flechas o WASD · Esc para salir.</p></div>
+  <div class="dragzone"><p class="help">Arrastra el dedo o el ratón por toda la pantalla, también por esta zona, en la dirección que quieras ir (4 direcciones, paralelas a los bordes). Separa dos dedos para ampliar. También funcionan las flechas o WASD · Esc para salir.</p></div>
   <div class="exitrow"><button id="plExit">Salir</button></div>
 </section>
 
@@ -170,8 +174,9 @@ const ITEMS=[
 {id:11,name:'Salida',kind:'exit'},
 {id:12,name:'Inicio del jugador',kind:'start'},
 {id:13,name:'Corazón (+1 vida)',kind:'sprite',spr:'heart'},
-{id:14,name:'Suelo cian',kind:'tile',col:'#8FCFC8'},
-{id:15,name:'Suelo amarillo',kind:'tile',col:'#F0D78C'}
+{id:14,name:'(suelo cian antiguo)',kind:'legacy'},
+{id:15,name:'(suelo amarillo antiguo)',kind:'legacy'},
+{id:16,name:'Agujero de teletransporte (obligatorio: 2 por sala)',kind:'tele'}
 ];
 
 /* ---------- utilidades de color y forma ---------- */
@@ -266,7 +271,15 @@ function drawBlock(ctx,i,j,col,h,o){o=o||{};const H=BH*h*HS;const [T,R,Bm,L]=cc2
     rpoly(ctx,[fp(Bm,R,.2,0),fp(Bm,R,.8,0),fp(Bm,R,.8,.8),fp(Bm,R,.2,.8)],shade(col,.46),4);
     const k=fp(L,Bm,.67,.38);circ(ctx,k[0],k[1],3.4,'#F0C75E');}
 }
-function drawTile(ctx,i,j,col){rpoly(ctx,cc2(i,j,.07),shade(col,.94),6);rpoly(ctx,cc2(i,j,.22),col,4);}
+function drawTele(ctx,i,j,o){const t=o&&o.t,c=P2(i+.5,j+.5);
+  rpoly(ctx,cc2(i,j,.06),'#6E5E9C',6);
+  rpoly(ctx,cc2(i,j,.16),'#B9A8DA',5);
+  rpoly(ctx,cc2(i,j,.27),'#2B2342',5);
+  ctx.lineWidth=2;
+  for(let k=0;k<2;k++){const r=t===undefined?.35+.3*k:((t*.7+k*.5)%1);
+    ctx.strokeStyle='rgba(185,168,218,'+(t===undefined?.85-.3*k:(1-r)*.9)+')';
+    ctx.beginPath();ctx.ellipse(c[0],c[1],(1-r)*17,(1-r)*8.5,0,0,Math.PI*2);ctx.stroke();}
+}
 function drawSpikes(ctx,i,j){rpoly(ctx,cc2(i,j,.1),'#D8D2C2',5);
   for(const [u,v] of [[.28,.28],[.72,.28],[.28,.72],[.72,.72]]){const b=P2(i+u,j+v);
     ctx.fillStyle='#5B5B66';ctx.strokeStyle='#5B5B66';ctx.lineWidth=3;ctx.lineJoin='round';
@@ -286,7 +299,7 @@ function drawItem(ctx,id,i,j,o){const it=ITEMS[id];const c=P2(i+.5,j+.5);const t
    case 'door':drawBlock(ctx,i,j,'#9C7BB5',1,{door:true});break;
    case 'spikes':drawSpikes(ctx,i,j);break;
    case 'exit':drawExit(ctx,i,j,o);break;
-   case 'tile':drawTile(ctx,i,j,it.col);break;
+   case 'tele':drawTele(ctx,i,j,o);break;
    case 'start':{const q=inset(cc2(i,j,.06),3);ctx.save();ctx.setLineDash([6,5]);ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.strokeStyle='rgba(61,57,41,.5)';
      ctx.beginPath();q.forEach((p,k)=>k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.stroke();ctx.restore();
      shadow(ctx,c);drawChar(ctx,'player',c[0],c[1]+6,false);break;}
@@ -295,6 +308,8 @@ function drawItem(ctx,id,i,j,o){const it=ITEMS[id];const c=P2(i+.5,j+.5);const t
   }}
 function renderRoom(ctx,room,o){o=o||{};HS=o.hs||1;
   ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,CW,CH);ctx.fillStyle=SAND;ctx.fillRect(0,0,CW,CH);
+  if(o.cam&&o.cam.z>1){const z=o.cam.z;let tx=CW/2-z*o.cam.x,ty=CH/2-z*o.cam.y;
+    tx=Math.min(0,Math.max(CW-z*CW,tx));ty=Math.min(0,Math.max(CH-z*CH,ty));ctx.setTransform(z,0,0,z,tx,ty);}
   const f=FLOORS[room.floor]||FLOORS[0];
   const P00=P2(0,0),P0N=P2(0,N),PNN=P2(N,N),PN0=P2(N,0),th=14;
   rpoly(ctx,[P0N,PNN,[PNN[0],PNN[1]+th],[P0N[0],P0N[1]+th]],shade(f[1],.8),7);
@@ -303,11 +318,11 @@ function renderRoom(ctx,room,o){o=o||{};HS=o.hs||1;
   for(let j=0;j<N;j++)for(let i=0;i<N;i++)rpoly(ctx,cc2(i,j,.03),(i+j)%2?f[1]:f[0],3);
   const list=[];
   room.cells.forEach((id,k)=>{if(!id)return;const it=ITEMS[id];const i=k%N,j=(k/N)|0;
-    if(it.kind==='tile'){drawTile(ctx,i,j,it.col);return;}
+    if(it.kind==='legacy')return;
     list.push({d:i+j+1,fn:()=>drawItem(ctx,id,i,j,o)});});
   (o.extra||[]).forEach(e=>list.push(e));
   list.sort((a,b)=>a.d-b.d);list.forEach(e=>e.fn());
-  HS=1;}
+  ctx.setTransform(1,0,0,1,0,0);HS=1;}
 function drawIcon(ctx,id){HS=1;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,64,64);
   if(id===0){ctx.strokeStyle='#D0694A';ctx.lineWidth=6;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(18,18);ctx.lineTo(46,46);ctx.moveTo(46,18);ctx.lineTo(18,46);ctx.stroke();return;}
   const s=.85;ctx.setTransform(s,0,0,s,32-OX*s,44-(OY+B)*s);
@@ -332,166 +347,84 @@ function pickCell(room,px,py,hs){const order=[];
 const $=id=>document.getElementById(id);
 function sanitize(g){try{if(!g||!Array.isArray(g.rooms)||!g.rooms.length)return null;
   const rooms=g.rooms.slice(0,MAXR).map(r=>({floor:Math.max(0,Math.min(6,(r.floor|0))),
-    cells:Array.from({length:N*N},(_,k)=>{const v=(r.cells&&r.cells[k])|0;return v>=0&&v<ITEMS.length?v:0;})}));
+    cells:Array.from({length:N*N},(_,k)=>{const v=(r.cells&&r.cells[k])|0;if(v===14||v===15)return 0;return v>=0&&v<ITEMS.length?v:0;})}));
   return{name:String(g.name||'Sin nombre').slice(0,24),rooms};}catch(e){return null;}}
 /* juego de ejemplo (hueco 1). Cada letra es un grafico; cada fila es una fila de la sala (8 casillas) */
-const LEG={'.':0,'#':1,'A':2,'V':3,'L':4,'g':5,'k':6,'D':7,'^':8,'F':9,'R':10,'E':11,'S':12,'h':13,'t':14,'u':15};
+const LEG={'.':0,'#':1,'A':2,'V':3,'L':4,'g':5,'k':6,'D':7,'^':8,'F':9,'R':10,'E':11,'S':12,'h':13,'O':16};
 const fromRows=rows=>rows.join('').split('').map(c=>LEG[c]||0);
-const DEMO={name:'Ejemplo 10 salas',rooms:[
- {floor:0,cells:fromRows([
-  'uu..A..E',
-  '.g..A...',
-  '....A.g.',
-  '...kD...',
-  '.^^.A...',
-  '...FA.R.',
-  '....Ah..',
-  'S.g.A...'])},
- {floor:3,cells:fromRows([
-  'S.......',
-  '.##..LLg',
-  '........',
-  'tt.g..^.',
-  '....#.^.',
-  '..R.#...',
-  '......g.',
-  '...h...E'])},
- {floor:1,cells:fromRows([
-  'S.V....g',
-  '.RV.VV..',
-  '..V.Vg..',
-  '....V.V.',
-  'VVV.V.V.',
-  'g.....V.',
-  '..VVVVV.',
-  '.......E'])},
- {floor:4,cells:fromRows([
-  'S..AkV.E',
-  '.g.A.V..',
-  '...D.V..',
-  'k..A.Vg.',
-  '...A.V..',
-  '.F.A.D..',
-  '...AgVR.',
-  '.^.A.V..'])},
- {floor:3,cells:fromRows([
-  'S.......',
-  '.^.^.^..',
-  '..L.L.L.',
-  'g......g',
-  '.^.^.^..',
-  '..L.L.L.',
-  '...F....',
-  'h......E'])},
- {floor:5,cells:fromRows([
-  'S.......',
-  '.g....g.',
-  '..R..R..',
-  '........',
-  'F.......',
-  '........',
-  '.g.....h',
-  '.......E'])},
- {floor:6,cells:fromRows([
-  'S.......',
-  '.VVVVVV.',
-  '.V....V.',
-  '.VF...V.',
-  '.V.g..D.',
-  '.V..g.V.',
-  '.VVVVVV.',
-  'k.....gE'])},
- {floor:2,cells:fromRows([
-  'S.......',
-  '.R...Rg.',
-  '........',
-  '..g.....',
-  '........',
-  '........',
-  '...Rg..R',
-  'h.....E.'])},
- {floor:1,cells:fromRows([
-  'S.k....g',
-  '.....F..',
-  'VVVVDVVV',
-  'k.......',
-  'g.....R.',
-  'VVVVVVDV',
-  '........',
-  'h.g....E'])},
- {floor:5,cells:fromRows([
-  'S.k...kg',
-  '...F....',
-  '.VVV.VVV',
-  '.VgV.VgV',
-  '.VDV.VDV',
-  '........',
-  '..R...R.',
-  '......hE'])}
-]};
+const fromData=(name,d)=>({name,rooms:d.map(([f,r])=>({floor:f,cells:fromRows(r.split('|'))}))});
+const GEN10=[
+ [0,'....A..E|.g..A...|....A.gO|...kD...|.^^.A...|...FAOR.|....Ah..|S.g.A...'],
+ [3,'S.......|.##..LLg|O.......|...g..^O|....#.^.|..R.#...|......g.|...h...E'],
+ [1,'S.V...Og|.RV.VV..|..V.Vg..|....V.V.|VVV.V.VO|g.....V.|..VVVVV.|.......E'],
+ [4,'S..AkV.E|.g.A.V..|...D.VO.|k..A.Vg.|...A.V..|.F.A.D..|...AgVR.|.^.A.V.O'],
+ [3,'S......O|.^.^.^..|..L.L.L.|g......g|.^.^.^..|..L.L.L.|...F..O.|h......E'],
+ [5,'S.......|.g....g.|..R..R..|....O...|F.......|........|.g.....h|.....O.E'],
+ [6,'S.....O.|.VVVVVV.|.V....V.|.VF...V.|.V.gO.D.|.V..g.V.|.VVVVVV.|k.....gE'],
+ [2,'S.......|.R...Rg.|........|.Og.....|........|....O...|...Rg..R|h.....E.'],
+ [1,'S.k...Og|.....F..|VVVVDVVV|k.......|gO....R.|VVVVVVDV|........|h.g....E'],
+ [5,'S.kO..kg|...F....|.VVV.VVV|.VgV.VgV|.VDV.VDV|........|..RO..R.|......hE']
+];
 const GEN20=[
- [0,'t...L...|t...##..|........|.S...LLL|......gg|.LLLL...|........|g..u..E.'],
- [0,'........|...L..S.|..LL....|..LL.g..|.tLL.g..|E......#|.......#|#......#'],
- [5,'....g...|..F.....|.....##.|........|.....S..|.###....|g..F....|E....AA.'],
- [3,'........|F.......|V....L..|V.....#.|V....S..|...g..#.|........|E...u..g'],
- [1,'.......#|g.......|........|E....^..|.VVVgF..|...^....|.t.g..S.|.A......'],
- [0,'........|..u.....|.F..g#..|......S.|^^......|.......A|.E...gtA|..h....A'],
- [2,'........|.#......|.#.....E|.#A.g.gF|.#A.F...|.#.....^|..S..^..|.t.##...'],
- [2,'....A..S|....A..t|####Ag^.|.....Fg.|..g.F...|^.F...LL|....AAA.|...hE...'],
- [2,'R.#...V.|u.#.gRV.|.E#.A...|..#.A..^|..A.A...|..A.A^u.|.g.LLL..|......S.'],
- [3,'..AAA...|..ugE...|.u..F...|.^g.....|....F.#.|......#.|.^.#V..S|...#V.#.'],
- [6,'F..^L...|....L...|gF.^....|.#...gE.|.#....##|....#.##|....#g#.|.Sh...#.'],
- [4,'.R..g...|...AA...|g^...tS.|g.......|VVVV.t..|....gF..|..^.....|..E#LLLA'],
- [0,'...Rg..#|^g...E.#|.u.t...#|...^g#R.|S....#..|..g^.#..|A.R..##.|A.h..LLL'],
- [0,'...h.AAA|.F.....#|..E...^#|......F#|g..g.F^.|^.VV....|^.LLLL..|VgL#...S'],
- [2,'..LLLL.^|L.LLA...|.S.V..Fg|...VF^..|...VF^..|..AA.g#.|..g...E.|.^AAAA..'],
- [1,'.....Vg.|gE...V..|..LLLVu^|.....V.g|tg^RA#..|R.#.A.S.|..#.^A.A|..#.hu.A'],
- [1,'.^...S..|...g....|.LLFg...|R.AAA..V|..^.^...|^.^.AAVV|h.......|gEAAV...'],
- [1,'t.#^.AAA|..D..^^F|..#L.Fu^|..#L...u|g##L.S.A|R.#L..V.|VE#.^kV.|g.#.g.V.'],
- [5,'..Fg.L.^|.F...L..|LL.#.L^.|.^.#...A|.g.#.S.A|^g.#A.VA|.R^#A.VA|Eg#.A.V.'],
- [1,'.t..V..^|gER^V...|...^Vug.|.^.tD.V.|...gV#.S|#.L^VL..|#.L^V.gV|#.L.Vg.k']
+ [0,'....L..O|....##..|........|.S...LLL|....O.gg|.LLLL...|........|g.....E.'],
+ [0,'....O...|...L..S.|..LL....|..LL.g..|..LL.g..|E....O.#|.......#|#......#'],
+ [5,'....g...|..F.....|.....##O|........|.....S..|.###....|g..F..O.|E....AA.'],
+ [3,'........|F.......|V....L..|V.....#.|V....S..|.O.g..#.|........|E...O..g'],
+ [1,'.......#|g.......|........|E....^..|.VVVgFO.|..O^....|...g..S.|.A......'],
+ [0,'........|.......O|.F..g#..|......S.|^^..O...|.......A|.E...g.A|..h....A'],
+ [2,'....O...|.#......|.#.....E|.#A.g.gF|.#A.F..O|.#.....^|..S..^..|...##...'],
+ [2,'....A..S|....A...|####Ag^O|...O.Fg.|..g.F...|^.F...LL|....AAA.|...hE...'],
+ [2,'R.#...V.|..#.gRVO|.E#.A...|..#.A..^|..A.AO..|..A.A^..|.g.LLL..|......S.'],
+ [3,'..AAA...|...gE.O.|....F...|.^g.....|....F.#.|....O.#.|.^.#V..S|...#V.#.'],
+ [6,'F..^L...|....LO..|gF.^....|.#...gE.|.#....##|.O..#.##|....#g#.|.Sh...#.'],
+ [4,'.R..g...|O..AA...|g^....S.|g......O|VVVV....|....gF..|..^.....|..E#LLLA'],
+ [0,'...Rg..#|^g...E.#|....O..#|...^g#R.|S....#..|..g^.#..|A.R..##O|A.h..LLL'],
+ [0,'...h.AAA|.F...O.#|..E...^#|......F#|g..g.F^O|^.VV....|^.LLLL..|VgL#...S'],
+ [2,'..LLLL.^|L.LLAO..|.S.V..Fg|...VF^..|...VF^..|..AA.g#O|..g...E.|.^AAAA..'],
+ [1,'.....Vg.|gE...V..|..LLLV.^|.O...V.g|.g^RA#..|R.#.A.S.|..#O^A.A|..#.h..A'],
+ [1,'.^...S..|...g..O.|.LLFg...|R.AAA..V|..^.^...|^.^.AAVV|h.......|gEAAV..O'],
+ [1,'..#^.AAA|..DO.^^F|..#L.F.^|..#L....|g##L.S.A|R.#L..V.|VE#.^kV.|g.#Og.V.'],
+ [5,'..Fg.L.^|.F...L..|LL.#.L^.|.^.#O..A|.g.#.S.A|^g.#A.VA|.R^#A.VA|Eg#.AOV.'],
+ [1,'....V..^|gER^V..O|...^V.g.|.^..D.V.|...gV#.S|#.L^VLO.|#.L^V.gV|#.L.Vg.k']
 ];
 const GEN30=[
- [0,'......E.|..V.....|..V....u|.uVg....|........|g..####.|..S.....|........'],
- [2,'g.VVV...|....E...|.....ut.|........|V.......|Vg..u...|........|.......S'],
- [1,'.....g..|........|........|....S...|...A...#|..gA...#|...A...#|E......#'],
- [1,'...V..g.|...V....|...V...g|.S.V.g..|........|..A.At.E|..A.A...|..t.A.R.'],
- [4,'.......^|E....g..|.....g..|......F.|.......g|........|...####.|L.S..AAA'],
- [5,'.......g|.......E|.AAAA.AA|...g.t..|........|S.......|........|L...tF..'],
- [4,'.....LL.|.......S|.^......|####..^.|A...R..g|A#LLL...|A...E.g.|A.......'],
- [5,'.tS.R.V.|^.....V.|........|Vg......|V.....^.|V.gt.E..|VVVVg..u|V.......'],
- [3,'.....#..|.....D..|...S.#gt|.k...#.E|VVVV.#..|....F##.|^g.LL##^|.u.g.##.'],
- [1,'#...A...|#.g.A.AA|#.^.D...|....A...|..g.A...|k...A...|.S..A.^R|....A.E.'],
- [0,'LL......|VVVV..L.|gE.g..L.|...^....|.tLLF...|..LL....|g^LL.S..|R.LL....'],
- [4,'.u....F.|..g....E|.g......|h...AAAA|t...u...|S.V^F...|..V.....|L.......'],
- [6,'AAA.#.E.|k.^.#.^.|R.g.D...|....#..u|g...#.h.|....#.^.|L..S#...|LR..#VVV'],
- [2,'EV^...g^|.V#.A...|.V..A^R.|..VVVV..|..g...g.|LL....u.|...S...R|........'],
- [4,'...E....|^..A...t|AAAAAADA|..V..g..|...S....|t.k..u..|..^.....|.^g..R.R'],
- [5,'....t.hg|.F..##.^|.ug.....|ELLL...A|..^.R..A|......S.|...g.#.A|.LLLL...'],
- [1,'....h...|S.......|.A...LLL|...F^...|........|.^gFLE#.|g..gL.V.|..F.V#V.'],
- [3,'.^E..V..|.ggu.V..|VVVDVVVV|.....g^.|...R....|.S.....g|A.ktLLLL|A..^#.A.'],
- [1,'t.^.u.g.|LA##...g|LA...gRL|LAE^...L|AAAADAAA|A...S.u.|A..k.V.^|^...FV..'],
- [5,'LLL.A..g|..^.A..E|...gA^.#|.S..A..#|..VV...#|.F...LL.|.gF..^..|..##^Fh.'],
- [6,'...g....|.^gVVVV.|g^...#..|h...^#.E|..F.....|....A.Lg|..S.AAL#|^...AAL.'],
- [1,'L.F..gg^|L.^A..F.|L..A...E|L..A^.LL|.S...#L#|V....AL.|VL.g.AL.|..hR.A..'],
- [0,'.u..S...|#gk...g.|####D###|.^#...F#|.....F..|.L.F..g^|.L.tF^..|.uE.####'],
- [0,'.^...LL.|LLL.F...|...^^...|.S....t.|.u.u..g.|F.....gA|L...F..g|L###...E'],
- [5,'.^.####V|^#...A.V|E#u.VA..|.R^gVA..|gt.RV.AA|..R....L|...g..S.|g.^...tL'],
- [2,'E.g.gu..|V.gVVV..|V^#.L.LR|Vg#h.Su.|..#....^|..#.V..#|#...V..^|#...V^u.'],
- [3,'..#..R^k|^.#.^g..|..D.L.VV|..#hL...|..#.L^..|.g#.L..#|RE#..A.t|.g#u.A.S'],
- [6,'..g^....|.L..^E..|gLV.....|..V.R^AA|.^##A#..|..VgA...|.....V..|.Sh.gV.#'],
- [6,'.....E..|.F..#.^^|g^..VVLL|F..g....|.AA.F^.g|........|t.S.....|#Vt....g'],
- [3,'E.VV.^g.|.A^...R.|.AAAtL^.|g....LgL|....S..L|.^.u.A#.|.F^^.A..|L..FgA..']
+ [0,'......E.|..V.....|..V..O..|..Vg....|........|g..####.|..S.....|...O....'],
+ [2,'g.VVV...|....E...|......O.|........|V.......|Vg......|..O.....|.......S'],
+ [1,'.....g..|........|......O.|....S...|...A...#|..gA...#|...A...#|E.....O#'],
+ [1,'...V.Og.|...V....|..OV...g|.S.V.g..|........|..A.A..E|..A.A...|....A.R.'],
+ [4,'.......^|E....g..|.....g..|......F.|.......g|.O......|...####O|L.S..AAA'],
+ [5,'.......g|.......E|.AAAA.AA|...g....|.O......|S.......|........|L....F.O'],
+ [4,'.....LL.|.......S|.^......|####.O^.|A...R..g|A#LLL...|A...E.g.|A......O'],
+ [5,'..S.R.V.|^.....V.|.....O..|Vg......|V.....^.|V.g..E.O|VVVVg...|V.......'],
+ [3,'.....#O.|.....D..|O..S.#g.|.k...#.E|VVVV.#..|....F##.|^g.LL##^|...g.##.'],
+ [1,'#...A..O|#.g.A.AA|#.^.D...|....A...|..g.A.O.|k...A...|.S..A.^R|....A.E.'],
+ [0,'LLO.....|VVVV..L.|gE.g.OL.|...^....|..LLF...|..LL....|g^LL.S..|R.LL....'],
+ [4,'......F.|..gO...E|.g......|h...AAAA|......O.|S.V^F...|..V.....|L.......'],
+ [6,'AAA.#.E.|k.^.#.^O|R.g.D...|....#...|g...#Oh.|....#.^.|L..S#...|LR..#VVV'],
+ [2,'EV^...g^|.V#.A...|.V..A^R.|..VVVV..|..g...g.|LLO.....|...S...R|......O.'],
+ [4,'O..E....|^..A....|AAAAAADA|..V..gO.|...S....|..k.....|..^.....|.^g..R.R'],
+ [5,'......hg|.F..##O^|..g.....|ELLL...A|..^.R..A|......S.|...g.#.A|.LLLL..O'],
+ [1,'....h...|S....O..|.A...LLL|.O.F^...|........|.^gFLE#.|g..gL.V.|..F.V#V.'],
+ [3,'.^E..V..|.gg..V..|VVVDVVVV|...O.g^.|...R...O|.S.....g|A.k.LLLL|A..^#.A.'],
+ [1,'..^...g.|LA##...g|LA...gRL|LAE^...L|AAAADAAA|A.O.S...|A..k.VO^|^...FV..'],
+ [5,'LLL.A..g|..^.A..E|...gA^.#|.S..A.O#|..VV...#|.F...LL.|.gF.O^..|..##^Fh.'],
+ [6,'O..g.O..|.^gVVVV.|g^...#..|h...^#.E|..F.....|....A.Lg|..S.AAL#|^...AAL.'],
+ [1,'LOF..gg^|L.^A..F.|L..A.O.E|L..A^.LL|.S...#L#|V....AL.|VL.g.AL.|..hR.A..'],
+ [0,'....S.O.|#gk...g.|####D###|.^#...F#|.....F..|OL.F..g^|.L..F^..|..E.####'],
+ [0,'.^O..LL.|LLL.F...|...^^...|.S....O.|......g.|F.....gA|L...F..g|L###...E'],
+ [5,'.^.####V|^#.O.A.V|E#..VA..|.R^gVA..|g..RV.AA|..R..O.L|...g..S.|g.^....L'],
+ [2,'E.g.g...|V.gVVV..|V^#.L.LR|Vg#h.S..|..#....^|..#OV..#|#...V..^|#...V^.O'],
+ [3,'..#..R^k|^.#.^g..|.OD.L.VV|..#hLO..|..#.L^..|.g#.L..#|RE#..A..|.g#..A.S'],
+ [6,'..g^...O|OL..^E..|gLV.....|..V.R^AA|.^##A#..|..VgA...|.....V..|.Sh.gV.#'],
+ [6,'.O...E..|.F..#.^^|g^..VVLL|F..g....|.AA.F^.g|....O...|..S.....|#V.....g'],
+ [3,'E.VV.^gO|.A^...R.|.AAAOL^.|g....LgL|....S..L|.^...A#.|.F^^.A..|L..FgA..']
 ];
-const fromData=(name,d)=>({name,rooms:d.map(([f,r])=>({floor:f,cells:fromRows(r.split('|'))}))});
-const DEMO2=fromData('Ejemplo 20 salas',GEN20),DEMO3=fromData('Ejemplo 30 salas',GEN30);
+const DEMO=fromData('Ejemplo 10 salas',GEN10),DEMO2=fromData('Ejemplo 20 salas',GEN20),DEMO3=fromData('Ejemplo 30 salas',GEN30);
 function demoSlots(){const s=Array(6).fill(null);s[0]=sanitize(DEMO);s[1]=sanitize(DEMO2);s[2]=sanitize(DEMO3);return s;}
 function load(){let raw=null;try{raw=localStorage.getItem('g3dm_slots');}catch(e){}
   if(raw){try{const s=JSON.parse(raw);if(Array.isArray(s)){const r=Array.from({length:6},(_,k)=>s[k]?sanitize(s[k]):null);
-    if(r[0]&&(r[0].name==='EJEMPLO'||r[0].name==='Ejemplo')){const rs=JSON.stringify(r[0].rooms),full=JSON.stringify(sanitize(DEMO).rooms),
-      two=JSON.stringify(sanitize({name:'x',rooms:DEMO.rooms.slice(0,2)}).rooms);
-      if(rs===full||rs===two)r[0]=sanitize(DEMO);}
-    [[0,DEMO],[1,DEMO2],[2,DEMO3]].forEach(([k,d])=>{if(r[k]&&r[k].name==='Ejemplo '+(k+1)&&JSON.stringify(r[k].rooms)===JSON.stringify(sanitize(d).rooms))r[k]=sanitize(d);});
+    const strip=d=>JSON.stringify(sanitize(d).rooms.map(x=>({floor:x.floor,cells:x.cells.map(v=>v===16?0:v)})));
+    [[0,DEMO],[1,DEMO2],[2,DEMO3]].forEach(([k,d])=>{if(r[k]&&/^ejemplo/i.test(r[k].name)&&JSON.stringify(r[k].rooms)===strip(d))r[k]=sanitize(d);});
     let seen=null;try{seen=localStorage.getItem('g3dm_demo23');}catch(e){}
     if(!seen){if(!r[1])r[1]=sanitize(DEMO2);if(!r[2])r[2]=sanitize(DEMO3);}
     return r;}}catch(e){}}
@@ -536,36 +469,44 @@ const ec=$('edCanvas'),ectx=ec.getContext('2d');
 function openEditor(slot){const g=slots[slot]?JSON.parse(JSON.stringify(slots[slot])):
   {name:'Juego '+(slot+1),rooms:[{floor:0,cells:Array(N*N).fill(0)}]};
   ED={slot,game:g,ri:0,sel:1,low:false};$('gname').value=g.name;show('editor');refreshEd();}
-function buildPalette(){const pal=$('palette');ITEMS.forEach(it=>{const b=document.createElement('button');b.className='pbtn';b.title=it.name;
-  const cv=document.createElement('canvas');cv.width=cv.height=64;drawIcon(cv.getContext('2d'),it.id);b.appendChild(cv);
+function buildPalette(){const pal=$('palette');ITEMS.filter(it=>it.kind!=='legacy').forEach(it=>{const b=document.createElement('button');b.className='pbtn';b.title=it.name;
+  const cv=document.createElement('canvas');cv.width=cv.height=64;drawIcon(cv.getContext('2d'),it.id);b.appendChild(cv);b.dataset.id=it.id;
   b.onclick=()=>{ED.sel=it.id;updPal();};pal.appendChild(b);});}
 function buildSwatches(){const s=$('floorSw');FLOORS.forEach((c,k)=>{const b=document.createElement('button');b.className='sw';b.style.background=c[1];b.title='Suelo '+(k+1);
   b.onclick=()=>{ED.game.rooms[ED.ri].floor=k;refreshEd();};s.appendChild(b);});}
-function updPal(){document.querySelectorAll('.pbtn').forEach((b,k)=>b.classList.toggle('on',k===ED.sel));$('selName').textContent=ITEMS[ED.sel].name;}
+function updPal(){document.querySelectorAll('.pbtn').forEach(b=>b.classList.toggle('on',+b.dataset.id===ED.sel));$('selName').textContent=ITEMS[ED.sel].name;}
+const teleCount=room=>room.cells.filter(v=>v===16).length;
+let edT=0;
+function edInfo(){const n=teleCount(ED.game.rooms[ED.ri]),m=$('edMsg');m.textContent='Agujeros de teletransporte en esta sala: '+n+' de 2';m.style.color=n===2?'#788C5D':'#C4623F';}
+function edSay(t){const m=$('edMsg');m.textContent=t;m.style.color='#C4623F';clearTimeout(edT);edT=setTimeout(()=>{if(ED)edInfo();},3500);}
+function edCheck(){const bad=ED.game.rooms.map((r,k)=>teleCount(r)===2?-1:k).filter(k=>k>=0);if(!bad.length)return true;
+  ED.ri=bad[0];refreshEd();edSay('La sala '+(bad[0]+1)+' necesita exactamente 2 agujeros de teletransporte (tiene '+teleCount(ED.game.rooms[bad[0]])+').');
+  try{$('edMsg').scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}return false;}
 function buildTabs(){const t=$('roomTabs');t.innerHTML='<span class="lbl">Sala</span>';
-  ED.game.rooms.forEach((r,k)=>{const b=document.createElement('button');b.textContent=String(k+1);if(k===ED.ri)b.classList.add('on');
+  ED.game.rooms.forEach((r,k)=>{const b=document.createElement('button');b.textContent=String(k+1);if(k===ED.ri)b.classList.add('on');if(teleCount(r)!==2)b.classList.add('bad');
     b.onclick=()=>{ED.ri=k;refreshEd();};t.appendChild(b);});
   if(ED.game.rooms.length<MAXR){const a=document.createElement('button');a.textContent='+';
     a.onclick=()=>{ED.game.rooms.push({floor:ED.game.rooms.length%FLOORS.length,cells:Array(N*N).fill(0)});ED.ri=ED.game.rooms.length-1;refreshEd();};t.appendChild(a);}}
 function refreshEd(){buildTabs();updPal();
   document.querySelectorAll('.sw').forEach((b,k)=>b.classList.toggle('on',k===ED.game.rooms[ED.ri].floor));
-  $('edDel').disabled=ED.game.rooms.length<2;$('edView').textContent=ED.low?'Muros: bajos':'Muros: altos';drawEditor();}
+  edInfo();$('edDel').disabled=ED.game.rooms.length<2;$('edView').textContent=ED.low?'Muros: bajos':'Muros: altos';drawEditor();}
 function drawEditor(){renderRoom(ectx,ED.game.rooms[ED.ri],{hs:ED.low?.4:1});}
 let painting=false;
 function edPaint(e){const r=ec.getBoundingClientRect();const px=(e.clientX-r.left)*CW/r.width,py=(e.clientY-r.top)*CH/r.height;
   const room=ED.game.rooms[ED.ri];const c=pickCell(room,px,py,ED.low?.4:1);if(!c)return;const k=c[1]*N+c[0];
+  if(ED.sel===16&&room.cells[k]!==16&&teleCount(room)>=2){edSay('Esta sala ya tiene sus 2 agujeros. Borra uno para colocarlo en otro sitio.');return;}
   if(ED.sel===12)room.cells.forEach((v,q)=>{if(v===12)room.cells[q]=0;});
-  if(room.cells[k]!==ED.sel||ED.sel===12){room.cells[k]=ED.sel;drawEditor();}}
+  if(room.cells[k]!==ED.sel||ED.sel===12){room.cells[k]=ED.sel;buildTabs();edInfo();drawEditor();}}
 ec.addEventListener('pointerdown',e=>{painting=true;try{ec.setPointerCapture(e.pointerId);}catch(x){}edPaint(e);e.preventDefault();});
-ec.addEventListener('pointermove',e=>{if(painting&&ED.sel!==12)edPaint(e);});
+ec.addEventListener('pointermove',e=>{if(painting&&ED.sel!==12&&ED.sel!==16)edPaint(e);});
 ['pointerup','pointercancel'].forEach(n=>ec.addEventListener(n,()=>painting=false));
 $('gname').addEventListener('input',e=>{if(ED)ED.game.name=e.target.value.slice(0,24);});
 $('edView').onclick=()=>{ED.low=!ED.low;refreshEd();};
 $('edClear').onclick=()=>{ED.game.rooms[ED.ri].cells.fill(0);drawEditor();};
 $('edDel').onclick=()=>{if(ED.game.rooms.length<2)return;ED.game.rooms.splice(ED.ri,1);ED.ri=Math.max(0,ED.ri-1);refreshEd();};
 $('edCancel').onclick=()=>{ED=null;show('home');};
-$('edSave').onclick=()=>{slots[ED.slot]=sanitize(ED.game);persist();sel=ED.slot;const n=ED.slot+1;ED=null;show('home');renderSlots();flash('Guardado en el hueco '+n);};
-$('edTest').onclick=()=>startPlay(sanitize(ED.game),'editor');
+$('edSave').onclick=()=>{if(!edCheck())return;slots[ED.slot]=sanitize(ED.game);persist();sel=ED.slot;const n=ED.slot+1;ED=null;show('home');renderSlots();flash('Guardado en el hueco '+n);};
+$('edTest').onclick=()=>{if(edCheck())startPlay(sanitize(ED.game),'editor');};
 
 /* ---------- juego ---------- */
 let G=null;
@@ -575,14 +516,15 @@ const solidKind=id=>{const k=ITEMS[id].kind;return k==='block'||k==='door';};
 function solid(i,j){if(i<0||j<0||i>=N||j>=N)return true;return solidKind(G.cells[j*N+i]);}
 function gemsLeft(){let n=0;for(const v of G.cells)if(v===5)n++;return n;}
 function say(t){G.msg=t;G.msgT=1.6;}
-function startPlay(game,back){G={src:game,game:JSON.parse(JSON.stringify(game)),back,lives:3,score:0,keys:0,over:false,won:false,msg:'',msgT:0,t:0,inv:0,face:1};
-  held=[];DR=null;$('overlay').hidden=true;enterRoom(0);say('Arrastra para moverte');show('player');}
+function startPlay(game,back){G={src:game,game:JSON.parse(JSON.stringify(game)),back,lives:3,score:0,keys:0,over:false,won:false,msg:'',msgT:0,t:0,inv:0,face:1,zoom:1};
+  held=[];DR=null;ptr.clear();pinch=null;$('overlay').hidden=true;enterRoom(0);say('Arrastra para moverte');show('player');}
 function enterRoom(ri){const rm=G.game.rooms[ri];G.ri=ri;G.cells=rm.cells.slice();G.ents=[];G.floor=rm.floor;let start=null;
   G.cells.forEach((id,k)=>{const i=k%N,j=(k/N)|0;
     if(id===9||id===10){G.ents.push({id,x:i+.5,y:j+.5,dir:1,axis:ITEMS[id].axis});G.cells[k]=0;}
     else if(id===12){start={x:i+.5,y:j+.5};G.cells[k]=0;}});
   if(!start){start={x:.5,y:.5};for(let k=0;k<N*N;k++){if(G.cells[k]===0){start={x:(k%N)+.5,y:((k/N)|0)+.5};break;}}}
-  G.start=start;G.px=start.x;G.py=start.y;G.inv=1;G.gemsTotal=gemsLeft();G.hasExit=G.cells.includes(11);}
+  G.start=start;G.px=start.x;G.py=start.y;G.inv=1;G.gemsTotal=gemsLeft();G.hasExit=G.cells.includes(11);
+  const tl=[];G.cells.forEach((id,k)=>{if(id===16)tl.push(k);});G.tele=tl.length===2?tl:null;G.teleLock=-1;G.tfx=null;}
 function hit(x,y){const r=.28;
   for(const [a,b] of [[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]]){const i=Math.floor(a),j=Math.floor(b);
     if(solid(i,j)){if(i>=0&&i<N&&j>=0&&j<N&&G.cells[j*N+i]===7&&G.keys>0){G.cells[j*N+i]=0;G.keys--;say('Puerta abierta');continue;}return true;}}
@@ -601,7 +543,7 @@ function curDir(){
     const sx=dx/A,sy=dy/B,gx=(sx+sy)/2,gy=(sy-sx)/2; /* pantalla -> ejes de la cuadricula */
     return Math.abs(gx)>=Math.abs(gy)?{ax:'x',s:gx>0?1:-1}:{ax:'y',s:gy>0?1:-1};}
   const k=held[held.length-1];return k?KDIR[k]:null;}
-function update(dt){if(G.over||G.won)return;G.t+=dt;G.inv=Math.max(0,G.inv-dt);if(G.msgT>0)G.msgT-=dt;
+function update(dt){if(G.over||G.won)return;G.t+=dt;if(G.tfx&&(G.tfx.t-=dt)<=0)G.tfx=null;G.inv=Math.max(0,G.inv-dt);if(G.msgT>0)G.msgT-=dt;
   const dir=curDir();
   if(dir){const sp=3.2*dt,al=6*dt;
     if(dir.ax==='x'){tryMove(dir.s*sp,0);const st=Math.max(-al,Math.min(al,Math.floor(G.py)+.5-G.py));if(st&&!hit(G.px,G.py+st))G.py+=st;G.face=dir.s>0?1:-1;}
@@ -611,6 +553,9 @@ function update(dt){if(G.over||G.won)return;G.t+=dt;G.inv=Math.max(0,G.inv-dt);i
     else{const ny=e.y+step;if(solid(Math.floor(e.x),Math.floor(ny+e.dir*.3)))e.dir*=-1;else e.y=ny;}
     if(Math.hypot(e.x-G.px,e.y-G.py)<.55)hurt();}
   if(G.over)return;
+  if(G.tele){const k0=Math.floor(G.py)*N+Math.floor(G.px);if(G.teleLock>=0&&k0!==G.teleLock)G.teleLock=-1;
+    if(G.teleLock<0){const ti=G.tele.indexOf(k0);if(ti>=0){const d=G.tele[1-ti],tx=(d%N)+.5,ty=Math.floor(d/N)+.5;
+      G.tfx={t:.45,fx:G.px,fy:G.py,tx,ty};G.px=tx;G.py=ty;G.teleLock=d;say('¡Teletransporte!');}}}
   const ci=Math.floor(G.px),cj=Math.floor(G.py),k=cj*N+ci;const id=G.cells[k];
   if(id===5){G.cells[k]=0;G.score+=100;say('+100');}
   else if(id===6){G.cells[k]=0;G.keys++;say('Llave');}
@@ -623,7 +568,10 @@ function drawPlay(){const extra=[];
   G.ents.forEach(e=>extra.push({d:e.x+e.y,fn:()=>{const p=P2(e.x,e.y);shadow(gc,p);
     drawChar(gc,e.id===9?'ghost':'robot',p[0],p[1]+4+(e.id===9?Math.sin(G.t*5)*2:0),e.axis==='x'?e.dir<0:false);}}));
   if(!(G.inv>0&&Math.floor(G.t*12)%2))extra.push({d:G.px+G.py,fn:()=>{const p=P2(G.px,G.py);shadow(gc,p);drawChar(gc,'player',p[0],p[1]+4,G.face<0);}});
-  renderRoom(gc,{floor:G.floor,cells:G.cells},{t:G.t,locked:gemsLeft()>0,extra});
+  if(G.tfx){const q=1-G.tfx.t/.45;for(const [x,y] of [[G.tfx.fx,G.tfx.fy],[G.tfx.tx,G.tfx.ty]])extra.push({d:99,fn:()=>{const p=P2(x,y);
+    gc.strokeStyle='rgba(185,168,218,'+(1-q)+')';gc.lineWidth=3;gc.beginPath();gc.ellipse(p[0],p[1],10+30*q,5+15*q,0,0,Math.PI*2);gc.stroke();}});}
+  const cp=P2(G.px,G.py);
+  renderRoom(gc,{floor:G.floor,cells:G.cells},{t:G.t,locked:gemsLeft()>0,extra,cam:{z:G.zoom,x:cp[0],y:cp[1]-15}});
   if(G.msgT>0){gc.font='600 17px ui-sans-serif,system-ui,sans-serif';gc.textAlign='center';const w=gc.measureText(G.msg).width+34;
     rrect(gc,CW/2-w/2,12,w,34,17);gc.fillStyle='rgba(61,57,41,.92)';gc.fill();gc.fillStyle='#FAF9F5';gc.fillText(G.msg,CW/2,35);}
   if(DR){const r=gc.canvas.getBoundingClientRect(),k=CW/r.width;
@@ -632,7 +580,7 @@ function drawPlay(){const extra=[];
     gc.fillStyle='rgba(217,119,87,.85)';gc.beginPath();gc.arc(px,py,8,0,7);gc.fill();}
   const s='<span>Vidas <b>'+G.lives+'</b></span><span>Gemas <b>'+(G.gemsTotal-gemsLeft())+'/'+G.gemsTotal+'</b></span><span>Llaves <b>'+G.keys+'</b></span><span>Puntos <b>'+G.score+'</b></span><span>Sala <b>'+(G.ri+1)+'/'+G.game.rooms.length+'</b></span>';
   if(s!==hudS){hudS=s;$('hud').innerHTML=s;}}
-function exitPlay(){const back=G&&G.back;G=null;held=[];DR=null;
+function exitPlay(){const back=G&&G.back;G=null;held=[];DR=null;ptr.clear();pinch=null;
   if(back==='editor'&&ED){show('editor');drawEditor();}else show('home');}
 let lastDrag=0; /* evita pulsar un boton justo al soltar un arrastre */
 const guard=f=>()=>{if(Date.now()-lastDrag<600)return;f();};
@@ -643,11 +591,20 @@ const KM={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',K
 addEventListener('keydown',e=>{if(cur!=='player'||!G)return;const k=KM[e.code];if(k){if(!held.includes(k))held.push(k);e.preventDefault();}if(e.code==='Escape')exitPlay();});
 addEventListener('keyup',e=>{const k=KM[e.code];if(k)held=held.filter(x=>x!==k);});
 const pl=$('player');
+const ptr=new Map();let pinch=null; /* punteros activos y gesto de pellizco */
 pl.addEventListener('pointerdown',e=>{if(!G||e.target.closest('button'))return;
-  DR={id:e.pointerId,ox:e.clientX,oy:e.clientY,cx:e.clientX,cy:e.clientY};try{pl.setPointerCapture(e.pointerId);}catch(x){}e.preventDefault();});
-pl.addEventListener('pointermove',e=>{if(!DR||e.pointerId!==DR.id)return;DR.cx=e.clientX;DR.cy=e.clientY;
+  ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});try{pl.setPointerCapture(e.pointerId);}catch(x){}
+  if(ptr.size===1&&!pinch)DR={id:e.pointerId,ox:e.clientX,oy:e.clientY,cx:e.clientX,cy:e.clientY};
+  else if(ptr.size>=2){DR=null;const [a,b]=[...ptr.values()];pinch={d0:Math.hypot(a.x-b.x,a.y-b.y)||1,z0:G.zoom};}
+  e.preventDefault();});
+pl.addEventListener('pointermove',e=>{if(ptr.has(e.pointerId))ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptr.size>=2&&G){const [a,b]=[...ptr.values()];G.zoom=Math.max(1,Math.min(3,pinch.z0*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d0));return;}
+  if(!DR||e.pointerId!==DR.id)return;DR.cx=e.clientX;DR.cy=e.clientY;
   const dx=DR.cx-DR.ox,dy=DR.cy-DR.oy,d=Math.hypot(dx,dy),M=40;if(d>M){DR.ox+=dx*(d-M)/d;DR.oy+=dy*(d-M)/d;}});
-['pointerup','pointercancel','lostpointercapture'].forEach(n=>pl.addEventListener(n,e=>{if(DR&&e.pointerId===DR.id){DR=null;lastDrag=Date.now();}}));
+['pointerup','pointercancel','lostpointercapture'].forEach(n=>pl.addEventListener(n,e=>{
+  if(!ptr.delete(e.pointerId)&&!(DR&&e.pointerId===DR.id))return;
+  if(DR&&e.pointerId===DR.id){DR=null;lastDrag=Date.now();}
+  if(ptr.size===0){if(pinch)lastDrag=Date.now();pinch=null;}}));
 
 let last=0;
 function frame(ts){requestAnimationFrame(frame);const dt=Math.min(.05,(ts-last)/1000||0);last=ts;
