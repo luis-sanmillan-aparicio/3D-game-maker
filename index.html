@@ -124,7 +124,7 @@ canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(-
   <div class="pal" id="palette"></div>
   <p class="help">Toca o arrastra para colocar. Recoge todas las gemas y llega a la salida para pasar de sala. Sin salida, la sala se supera al recoger todas las gemas. Un juego puede tener hasta 30 salas (botón +). Los agujeros de teletransporte van por parejas: cada sala puede tener 0 o 2, nunca uno solo. Al pisar uno apareces en el otro.</p>
   <div class="btnrow">
-    <button id="edTest">Probar</button>
+    <button id="edTest">Probar sala</button>
     <button id="edClear">Limpiar sala</button>
     <button id="edDel">Quitar sala</button>
     <button id="edCancel">Cancelar</button>
@@ -554,7 +554,9 @@ $('edClear').onclick=()=>{ED.game.rooms[ED.ri].cells.fill(0);drawEditor();};
 $('edDel').onclick=()=>{if(ED.game.rooms.length<2)return;ED.game.rooms.splice(ED.ri,1);ED.ri=Math.max(0,ED.ri-1);refreshEd();};
 $('edCancel').onclick=()=>{ED=null;show('home');};
 $('edSave').onclick=()=>{if(!edCheck())return;slots[ED.slot]=sanitize(ED.game);persist();sel=ED.slot;const n=ED.slot+1;ED=null;show('home');renderSlots();flash('Guardado en el hueco '+n);};
-$('edTest').onclick=()=>{if(edCheck())startPlay(sanitize(ED.game),'editor');};
+$('edTest').onclick=()=>{const room=ED.game.rooms[ED.ri];
+  if(teleCount(room)===1){edSay('Esta sala tiene un solo agujero de teletransporte: coloca su pareja o bórralo.');return;}
+  startPlay(sanitize({name:ED.game.name,rooms:[room]}),'editor');};
 
 /* ---------- juego ---------- */
 let G=null;
@@ -660,6 +662,10 @@ function frame(ts){requestAnimationFrame(frame);const dt=Math.min(.05,(ts-last)/
 
 /* ---------- arranque ---------- */
 buildPalette();buildSwatches();renderSlots();show('home');requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
 })();
 </script>
 </body>
