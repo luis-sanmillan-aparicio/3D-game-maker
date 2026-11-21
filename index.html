@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -313,6 +314,16 @@ function drawItem(ctx,id,i,j,o){const it=ITEMS[id];const c=P2(i+.5,j+.5);const t
    case 'enemy':shadow(ctx,c);drawChar(ctx,it.spr,c[0],c[1]+6,false);break;
    case 'sprite':{const bob=t!==undefined?Math.sin(t*4+i+j)*3:0;shadow(ctx,c,9,3.5);drawChar(ctx,it.spr,c[0],c[1]-2+bob,false);break;}
   }}
+function drawPaths(ctx,room){const sol=(i,j)=>{if(i<0||j<0||i>=N||j>=N)return true;const q=ITEMS[room.cells[j*N+i]].kind;return q==='block'||q==='door';};
+  room.cells.forEach((id,k)=>{if(id!==9&&id!==10)return;const i=k%N,j=(k/N)|0,gx=id===9;
+    let a=gx?i:j,b=a;
+    while(!(gx?sol(a-1,j):sol(i,a-1)))a--;
+    while(!(gx?sol(b+1,j):sol(i,b+1)))b++;
+    const p=gx?P2(a+.3,j+.5):P2(i+.5,a+.3),q=gx?P2(b+.7,j+.5):P2(i+.5,b+.7);
+    const col=gx?'#9D86CC':'#6F8A52';
+    ctx.save();ctx.globalAlpha=.8;ctx.strokeStyle=col;ctx.lineWidth=3;ctx.lineCap='round';ctx.setLineDash([7,6]);
+    ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();
+    ctx.setLineDash([]);circ(ctx,p[0],p[1],3.5,col);circ(ctx,q[0],q[1],3.5,col);ctx.restore();});}
 function renderRoom(ctx,room,o){o=o||{};HS=o.hs||1;
   ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,CW,CH);ctx.fillStyle=SAND;ctx.fillRect(0,0,CW,CH);
   if(o.cam&&o.cam.z>1){const z=o.cam.z;let tx=CW/2-z*o.cam.x,ty=CH/2-z*o.cam.y;
@@ -323,6 +334,7 @@ function renderRoom(ctx,room,o){o=o||{};HS=o.hs||1;
   rpoly(ctx,[PNN,PN0,[PN0[0],PN0[1]+th],[PNN[0],PNN[1]+th]],shade(f[1],.68),7);
   rpoly(ctx,[P00,PN0,PNN,P0N],shade(f[1],.9),9);
   for(let j=0;j<N;j++)for(let i=0;i<N;i++)rpoly(ctx,cc2(i,j,.03),(i+j)%2?f[1]:f[0],3);
+  if(o.paths)drawPaths(ctx,room);
   const list=[];
   room.cells.forEach((id,k)=>{if(!id)return;const it=ITEMS[id];const i=k%N,j=(k/N)|0;
     if(it.kind==='legacy')return;
@@ -497,7 +509,7 @@ function buildTabs(){const t=$('roomTabs');t.innerHTML='<span class="lbl">Sala</
 function refreshEd(){buildTabs();updPal();
   document.querySelectorAll('.sw').forEach((b,k)=>b.classList.toggle('on',k===ED.game.rooms[ED.ri].floor));
   edInfo();$('edDel').disabled=ED.game.rooms.length<2;$('edView').textContent=ED.low?'Muros: bajos':'Muros: altos';drawEditor();}
-function drawEditor(){renderRoom(ectx,ED.game.rooms[ED.ri],{hs:ED.low?.4:1,cam:{z:ED.zoom,x:ED.cx,y:ED.cy}});updZoom();}
+function drawEditor(){renderRoom(ectx,ED.game.rooms[ED.ri],{hs:ED.low?.4:1,paths:true,cam:{z:ED.zoom,x:ED.cx,y:ED.cy}});updZoom();}
 function edCam(){const z=ED.zoom;if(z<=1)return{z:1,tx:0,ty:0};
   return{z,tx:Math.min(0,Math.max(CW-z*CW,CW/2-z*ED.cx)),ty:Math.min(0,Math.max(CH-z*CH,CH/2-z*ED.cy))};}
 function clampCam(){const z=ED.zoom;ED.cx=Math.min(CW-CW/(2*z),Math.max(CW/(2*z),ED.cx));ED.cy=Math.min(CH-CH/(2*z),Math.max(CH/(2*z),ED.cy));}
