@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -81,6 +80,9 @@ canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(-
 .modal .box{background:#fff;border:1px solid var(--line);border-radius:22px;padding:18px;width:100%;max-width:520px}
 .modal h3{margin:0 0 10px;font-size:20px}
 .modal textarea{width:100%;height:170px;background:var(--bg);color:var(--ink2);border:1px solid var(--line);border-radius:12px;font:12px ui-monospace,Menlo,monospace;padding:10px}
+.zoomrow{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:8px 0 6px}
+.zoomrow button{width:42px;height:36px;padding:0;border-radius:99px;font-size:22px;line-height:1;display:grid;place-items:center}
+.zoomrow svg{width:18px;height:18px}
 </style>
 </head>
 <body>
@@ -109,6 +111,11 @@ canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(-
 <section id="editor" hidden>
   <div class="bar"><span class="lbl">Nombre</span><input id="gname" maxlength="24" autocomplete="off"></div>
   <div class="tabs" id="roomTabs"></div>
+  <div class="zoomrow">
+    <button id="zOut" aria-label="Alejar">−</button>
+    <button id="zReset" aria-label="Zoom normal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10" cy="10" r="6"/><line x1="15" y1="15" x2="21" y2="21"/></svg></button>
+    <button id="zIn" aria-label="Ampliar">+</button>
+  </div>
   <canvas id="edCanvas" class="cv" width="512" height="384"></canvas>
   <div class="row"><span class="lbl">Suelo</span><span id="floorSw" class="row" style="margin:0"></span><button id="edView" class="small" style="margin-left:auto"></button></div>
   <div id="selName"></div>
@@ -468,7 +475,7 @@ let ED=null;
 const ec=$('edCanvas'),ectx=ec.getContext('2d');
 function openEditor(slot){const g=slots[slot]?JSON.parse(JSON.stringify(slots[slot])):
   {name:'Juego '+(slot+1),rooms:[{floor:0,cells:Array(N*N).fill(0)}]};
-  ED={slot,game:g,ri:0,sel:1,low:false};$('gname').value=g.name;show('editor');refreshEd();}
+  ED={slot,game:g,ri:0,sel:1,low:false,zoom:1,cx:CW/2,cy:CH/2};$('gname').value=g.name;show('editor');refreshEd();}
 function buildPalette(){const pal=$('palette');ITEMS.filter(it=>it.kind!=='legacy').forEach(it=>{const b=document.createElement('button');b.className='pbtn';b.title=it.name;
   const cv=document.createElement('canvas');cv.width=cv.height=64;drawIcon(cv.getContext('2d'),it.id);b.appendChild(cv);b.dataset.id=it.id;
   b.onclick=()=>{ED.sel=it.id;updPal();};pal.appendChild(b);});}
@@ -490,16 +497,45 @@ function buildTabs(){const t=$('roomTabs');t.innerHTML='<span class="lbl">Sala</
 function refreshEd(){buildTabs();updPal();
   document.querySelectorAll('.sw').forEach((b,k)=>b.classList.toggle('on',k===ED.game.rooms[ED.ri].floor));
   edInfo();$('edDel').disabled=ED.game.rooms.length<2;$('edView').textContent=ED.low?'Muros: bajos':'Muros: altos';drawEditor();}
-function drawEditor(){renderRoom(ectx,ED.game.rooms[ED.ri],{hs:ED.low?.4:1});}
+function drawEditor(){renderRoom(ectx,ED.game.rooms[ED.ri],{hs:ED.low?.4:1,cam:{z:ED.zoom,x:ED.cx,y:ED.cy}});updZoom();}
+function edCam(){const z=ED.zoom;if(z<=1)return{z:1,tx:0,ty:0};
+  return{z,tx:Math.min(0,Math.max(CW-z*CW,CW/2-z*ED.cx)),ty:Math.min(0,Math.max(CH-z*CH,CH/2-z*ED.cy))};}
+function clampCam(){const z=ED.zoom;ED.cx=Math.min(CW-CW/(2*z),Math.max(CW/(2*z),ED.cx));ED.cy=Math.min(CH-CH/(2*z),Math.max(CH/(2*z),ED.cy));}
+function updZoom(){$('zOut').disabled=ED.zoom<=1;$('zIn').disabled=ED.zoom>=3;}
+function edZoom(d){ED.zoom=Math.max(1,Math.min(3,Math.round((ED.zoom+d)*2)/2));clampCam();drawEditor();}
+$('zIn').onclick=()=>edZoom(.5);
+$('zOut').onclick=()=>edZoom(-.5);
+$('zReset').onclick=()=>{ED.zoom=1;ED.cx=CW/2;ED.cy=CH/2;drawEditor();};
 let painting=false;
 function edPaint(e){const r=ec.getBoundingClientRect();const px=(e.clientX-r.left)*CW/r.width,py=(e.clientY-r.top)*CH/r.height;
-  const room=ED.game.rooms[ED.ri];const c=pickCell(room,px,py,ED.low?.4:1);if(!c)return;const k=c[1]*N+c[0];
+  const room=ED.game.rooms[ED.ri];const v=edCam();const c=pickCell(room,(px-v.tx)/v.z,(py-v.ty)/v.z,ED.low?.4:1);if(!c)return;const k=c[1]*N+c[0];
   if(ED.sel===16&&room.cells[k]!==16&&teleCount(room)>=2){edSay('Esta sala ya tiene sus 2 agujeros. Borra uno para colocarlo en otro sitio.');return;}
   if(ED.sel===12)room.cells.forEach((v,q)=>{if(v===12)room.cells[q]=0;});
   if(room.cells[k]!==ED.sel||ED.sel===12){room.cells[k]=ED.sel;buildTabs();edInfo();drawEditor();}}
-ec.addEventListener('pointerdown',e=>{painting=true;try{ec.setPointerCapture(e.pointerId);}catch(x){}edPaint(e);e.preventDefault();});
-ec.addEventListener('pointermove',e=>{if(painting&&ED.sel!==12&&ED.sel!==16)edPaint(e);});
-['pointerup','pointercancel'].forEach(n=>ec.addEventListener(n,()=>painting=false));
+const eptr=new Map();let pan=null,pend=null;
+ec.addEventListener('pointerdown',e=>{
+  eptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{ec.setPointerCapture(e.pointerId);}catch(x){}
+  e.preventDefault();
+  if(eptr.size>=2){painting=false;pend=null;const [a,b]=[...eptr.values()];pan={mx:(a.x+b.x)/2,my:(a.y+b.y)/2};return;}
+  if(ED.zoom>1){pend={clientX:e.clientX,clientY:e.clientY};return;} /* con zoom, el toque se confirma al soltar */
+  painting=true;edPaint(e);});
+ec.addEventListener('pointermove',e=>{
+  if(!eptr.has(e.pointerId))return;
+  eptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pan&&eptr.size>=2){const [a,b]=[...eptr.values()];const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    const k=CW/ec.getBoundingClientRect().width/ED.zoom;
+    ED.cx-=(mx-pan.mx)*k;ED.cy-=(my-pan.my)*k;pan.mx=mx;pan.my=my;clampCam();drawEditor();return;}
+  if(pend){if(Math.hypot(e.clientX-pend.clientX,e.clientY-pend.clientY)<8)return;painting=true;edPaint(pend);pend=null;}
+  if(painting&&ED.sel!==12&&ED.sel!==16)edPaint(e);});
+['pointerup','pointercancel'].forEach(n=>ec.addEventListener(n,e=>{
+  if(!eptr.delete(e.pointerId))return;
+  if(pend&&eptr.size===0&&n==='pointerup')edPaint(pend);
+  pend=null;
+  if(eptr.size<2)pan=null;
+  if(eptr.size===0)painting=false;}));
+ec.addEventListener('wheel',e=>{if(!ED||ED.zoom<=1)return;e.preventDefault();
+  const k=CW/ec.getBoundingClientRect().width/ED.zoom;ED.cx+=e.deltaX*k;ED.cy+=e.deltaY*k;clampCam();drawEditor();},{passive:false});
 $('gname').addEventListener('input',e=>{if(ED)ED.game.name=e.target.value.slice(0,24);});
 $('edView').onclick=()=>{ED.low=!ED.low;refreshEd();};
 $('edClear').onclick=()=>{ED.game.rooms[ED.ri].cells.fill(0);drawEditor();};
