@@ -121,7 +121,7 @@ canvas.cv{width:100%;display:block;background:var(--sand);border:1px solid var(-
   <div id="selName"></div>
   <div class="msg" id="edMsg" style="text-align:left;min-height:22px;margin:2px 0 8px"></div>
   <div class="pal" id="palette"></div>
-  <p class="help">Toca o arrastra para colocar. Recoge todas las gemas y llega a la salida para pasar de sala. Sin salida, la sala se supera al recoger todas las gemas. Un juego puede tener hasta 30 salas (botón +). Cada sala necesita exactamente 2 agujeros de teletransporte, ni uno más ni uno menos: al pisar uno apareces en el otro.</p>
+  <p class="help">Toca o arrastra para colocar. Recoge todas las gemas y llega a la salida para pasar de sala. Sin salida, la sala se supera al recoger todas las gemas. Un juego puede tener hasta 30 salas (botón +). Los agujeros de teletransporte van por parejas: cada sala puede tener 0 o 2, nunca uno solo. Al pisar uno apareces en el otro.</p>
   <div class="btnrow">
     <button id="edTest">Probar</button>
     <button id="edClear">Limpiar sala</button>
@@ -183,7 +183,7 @@ const ITEMS=[
 {id:13,name:'Corazón (+1 vida)',kind:'sprite',spr:'heart'},
 {id:14,name:'(suelo cian antiguo)',kind:'legacy'},
 {id:15,name:'(suelo amarillo antiguo)',kind:'legacy'},
-{id:16,name:'Agujero de teletransporte (obligatorio: 2 por sala)',kind:'tele'}
+{id:16,name:'Agujero de teletransporte (van por parejas: 0 o 2 por sala)',kind:'tele'}
 ];
 
 /* ---------- utilidades de color y forma ---------- */
@@ -484,13 +484,13 @@ function buildSwatches(){const s=$('floorSw');FLOORS.forEach((c,k)=>{const b=doc
 function updPal(){document.querySelectorAll('.pbtn').forEach(b=>b.classList.toggle('on',+b.dataset.id===ED.sel));$('selName').textContent=ITEMS[ED.sel].name;}
 const teleCount=room=>room.cells.filter(v=>v===16).length;
 let edT=0;
-function edInfo(){const n=teleCount(ED.game.rooms[ED.ri]),m=$('edMsg');m.textContent='Agujeros de teletransporte en esta sala: '+n+' de 2';m.style.color=n===2?'#788C5D':'#C4623F';}
+function edInfo(){const n=teleCount(ED.game.rooms[ED.ri]),m=$('edMsg');m.textContent='Agujeros de teletransporte en esta sala: '+n+(n===1?' (falta su pareja)':' (0 o 2 es correcto)');m.style.color=n===1?'#C4623F':'#788C5D';}
 function edSay(t){const m=$('edMsg');m.textContent=t;m.style.color='#C4623F';clearTimeout(edT);edT=setTimeout(()=>{if(ED)edInfo();},3500);}
-function edCheck(){const bad=ED.game.rooms.map((r,k)=>teleCount(r)===2?-1:k).filter(k=>k>=0);if(!bad.length)return true;
-  ED.ri=bad[0];refreshEd();edSay('La sala '+(bad[0]+1)+' necesita exactamente 2 agujeros de teletransporte (tiene '+teleCount(ED.game.rooms[bad[0]])+').');
+function edCheck(){const bad=ED.game.rooms.map((r,k)=>teleCount(r)!==1?-1:k).filter(k=>k>=0);if(!bad.length)return true;
+  ED.ri=bad[0];refreshEd();edSay('La sala '+(bad[0]+1)+' tiene un solo agujero de teletransporte: coloca su pareja o bórralo.');
   try{$('edMsg').scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}return false;}
 function buildTabs(){const t=$('roomTabs');t.innerHTML='<span class="lbl">Sala</span>';
-  ED.game.rooms.forEach((r,k)=>{const b=document.createElement('button');b.textContent=String(k+1);if(k===ED.ri)b.classList.add('on');if(teleCount(r)!==2)b.classList.add('bad');
+  ED.game.rooms.forEach((r,k)=>{const b=document.createElement('button');b.textContent=String(k+1);if(k===ED.ri)b.classList.add('on');if(teleCount(r)===1)b.classList.add('bad');
     b.onclick=()=>{ED.ri=k;refreshEd();};t.appendChild(b);});
   if(ED.game.rooms.length<MAXR){const a=document.createElement('button');a.textContent='+';
     a.onclick=()=>{ED.game.rooms.push({floor:ED.game.rooms.length%FLOORS.length,cells:Array(N*N).fill(0)});ED.ri=ED.game.rooms.length-1;refreshEd();};t.appendChild(a);}}
